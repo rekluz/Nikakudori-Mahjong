@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Nikakudori Mahjong</string>
+    <string name="win_message">YOU WON!</string>
+    <string name="current_score_label">Your Score: %1$d</string>
+    <string name="placeholder_rankings">1. 0\n2. 0\n3. 0</string>
+    <string name="btn_play_again">Play Again</string>
+    <string name="about_developer">Developed by Rico</string>
+    <string name="about_description">A classic tile-matching game. Match pairs to clear the board!</string>
+
+    <string name="version_label">Version %1$s</string>
+
+    <string name="github_url">https://github.com/rekluz/NikakudoriMahjong</string>
+</resources>
