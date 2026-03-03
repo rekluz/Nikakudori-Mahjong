@@ -4,7 +4,9 @@ plugins {
 }
 
 android {
-    namespace = "com.example.nikakudorimahjong"
+    // This must match your physical folder structure
+    namespace = "com.rekluzgames.nikakudorimahjong"
+
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -12,13 +14,15 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.nikakudorimahjong"
+        // This is the unique ID for the Play Store
+        applicationId = "com.rekluzgames.nikakudorimahjong"
         minSdk = 24
         targetSdk = 36
+
         // Incremented to 2 for the next store release
-        versionCode = 26030302
+        versionCode = 26030303
         // Updated to 1.1 for user visibility
-        versionName = "3.0.1"
+        versionName = "3.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

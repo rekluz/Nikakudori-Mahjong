@@ -1,4 +1,4 @@
-package com.example.nikakudorimahjong
+package com.rekluzgames.nikakudorimahjong
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rekluzgames.nikakudorimahjong.R
 
 @Composable
 fun AboutScreen(versionName: String) {

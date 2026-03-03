@@ -1,4 +1,4 @@
-package com.example.nikakudorimahjong.ui.theme
+package com.rekluzgames.nikakudorimahjong.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

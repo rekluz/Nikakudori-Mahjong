@@ -1,4 +1,4 @@
-package com.example.nikakudorimahjong.ui.theme
+package com.rekluzgames.nikakudorimahjong.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -9,6 +9,11 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+
+/*
+ * Note: Colors (Purple80, Purple40, etc.) are pulled from Color.kt
+ * to avoid conflicting declarations.
+ */
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -23,7 +28,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun NikakudoriMahjongTheme(
+fun ShisenShoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
@@ -41,7 +46,7 @@ fun NikakudoriMahjongTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = Typography, // This pulls from your Type.kt file
         content = content
     )
 }

@@ -1,4 +1,11 @@
-package com.example.nikakudorimahjong
+/*
+ * Copyright (c) 2026 Rekluz Games. All rights reserved.
+ * This code and its assets are the exclusive property of Rekluz Games.
+ * Unauthorized copying, distribution, or commercial use is strictly prohibited.
+ */
+// Last Updated: March 3, 2026 - Rekluz Games
+
+package com.rekluzgames.nikakudorimahjong
 
 import android.os.Build
 import android.os.Bundle
@@ -54,13 +61,12 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.example.nikakudorimahjong.ui.theme.NikakudoriMahjongTheme
+import com.rekluzgames.nikakudorimahjong.ui.theme.ShisenShoTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
-// Helper factory to provide context to the ViewModel
 class GameViewModelFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
@@ -77,6 +83,7 @@ class MainActivity : ComponentActivity() {
 
         var keepSplashScreen = true
         splashScreen.setKeepOnScreenCondition { keepSplashScreen }
+
         lifecycleScope.launch {
             delay(800)
             keepSplashScreen = false
@@ -86,19 +93,21 @@ class MainActivity : ComponentActivity() {
         hideSystemUI()
 
         setContent {
-            NikakudoriMahjongTheme {
+            ShisenShoTheme {
                 val game = viewModel.game
 
+                // Timer Logic
                 LaunchedEffect(game.gameState) {
                     while (isActive && game.gameState == GameState.PLAYING) {
                         delay(1000)
-                        if (game.gameState == GameState.PLAYING) {
-                            game.timeSeconds++
-                        }
+                        game.timeSeconds++
                     }
                 }
 
-                Surface(modifier = Modifier.fillMaxSize(), color = game.bgThemeColor) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = game.bgThemeColor
+                ) {
                     ShisenShoScreen(game = game, onExit = { finish() })
                 }
             }
@@ -391,7 +400,6 @@ fun AboutDialog(onDismiss: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
 
-    // Dynamically get the version name from build.gradle.kts
     val versionName = remember {
         try {
             val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -402,7 +410,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
             }
             packageInfo.versionName ?: "3.0.1"
         } catch (e: Exception) {
-            "3.0.1" // Fallback if lookup fails
+            "3.0.1"
         }
     }
 
@@ -410,11 +418,11 @@ fun AboutDialog(onDismiss: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Nikakudori Mahjong", color = Color.Yellow, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "A tile matching game by Rico", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(text = "A tile matching game by Rekluz Games", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(text = "Version $versionName", color = Color.Gray, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Nikakudori is a traditional Japanese tile-matching puzzle game. Connect identical pairs using a path with no more than two 90-degree turns to clear the board.",
+                text = "Nikakudori Mahjong is a traditional Japanese tile-matching puzzle game. Connect identical pairs using a path with no more than two 90-degree turns to clear the board.",
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 fontSize = 14.sp
@@ -425,7 +433,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 color = Color(0xFF00BFFF),
                 fontSize = 14.sp,
                 modifier = Modifier.clickable {
-                    uriHandler.openUri("https://github.com/rekluz/NikakudoriMahjong")
+                    uriHandler.openUri("https://github.com/rekluz/nikakudorimahjong")
                 }
             )
             Spacer(modifier = Modifier.height(24.dp))

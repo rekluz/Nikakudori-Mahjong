@@ -1,8 +1,10 @@
-package com.example.nikakudorimahjong
+package com.rekluzgames.nikakudorimahjong
 
 import android.content.Context
 import android.content.SharedPreferences
 import android.media.SoundPool
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -199,9 +201,9 @@ class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
         autoSolveSequence.clear()
     }
 
-    fun onTileClick(row: Int, col: Int, view: android.view.View) {
+    fun onTileClick(row: Int, col: Int, view: View) {
         if (gameState != GameState.PLAYING) return
-        if (!isAutoPlaying) view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        if (!isAutoPlaying) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
 
         val tile = board[row][col]
         if (tile.isRemoved) return
@@ -310,7 +312,7 @@ class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
         return null
     }
 
-    fun startAutocomplete(view: android.view.View) {
+    fun startAutocomplete(view: View) {
         showAutocompletePrompt = false
         isAutoPlaying = true
         gameScope.launch {
