@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" alt="Platform">
   <img src="https://img.shields.io/badge/Language-Kotlin-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/UI-Jetpack_Compose-blue.svg" alt="UI Framework">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+  
 </p>
 
 ---
