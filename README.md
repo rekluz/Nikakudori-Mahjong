@@ -18,7 +18,7 @@
 
 ---
 
-### 🎮 Features
+### 📱 App Features
 
 * **Multiple Board Sizes:** Choose your challenge, from **5x14 (Relaxed)** to **8x21 (Expert)**.
 * **Game Modes:** Supports standard layouts and unique custom **"Hollow"** board shapes.
