@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/splash_icon.png" width="256" height="256" alt="Nikakudori Mahjong Icon">
+  <img src="graphics/splash_icon.png" width="256" height="256" alt="Nikakudori Mahjong Icon">
 </p>
 
 <h1 align="center">Nikakudori Mahjong</h1>
