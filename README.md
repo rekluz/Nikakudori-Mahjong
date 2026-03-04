@@ -41,7 +41,7 @@ This game was developed as a personal journey into Android development. As a beg
 
 ---
 <p align="center">
-  Developed with ❤️ by Rico | 2026
+  Developed by Rekluz Games | 2026
 </p>
 <p align="center">
   <img src="graphics/screenshot.png" width="600" alt="Nikakudori Mahjong Gameplay" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
