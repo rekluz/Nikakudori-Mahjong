@@ -3,7 +3,8 @@
  * This code and its assets are the exclusive property of Rekluz Games.
  * Unauthorized copying, distribution, or commercial use is strictly prohibited.
  */
-// Last Updated: March 4, 2026 - Rekluz Games
+// Last Updated: March 5, 2026 - Rekluz Games
+// Fix: Added dynamic vertical compression for Alphabetic mode to remove row gaps.
 
 package com.rekluzgames.nikakudorimahjong
 
@@ -26,6 +27,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -44,7 +48,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
@@ -53,6 +56,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,7 +101,6 @@ class MainActivity : ComponentActivity() {
             ShisenShoTheme {
                 val game = viewModel.game
 
-                // Timer Logic
                 LaunchedEffect(game.gameState) {
                     while (isActive && game.gameState == GameState.PLAYING) {
                         delay(1000)
@@ -112,13 +115,6 @@ class MainActivity : ComponentActivity() {
                     ShisenShoScreen(game = game, onExit = { finish() })
                 }
             }
-        }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        if (viewModel.game.gameState == GameState.PLAYING) {
-            viewModel.game.gameState = GameState.PAUSED
         }
     }
 
@@ -188,19 +184,23 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                     val heightPx = containerSize.height.toFloat()
                     val widthDp = with(density) { widthPx.toDp() }
                     val heightDp = with(density) { heightPx.toDp() }
+
                     val scaledWidthDp = widthDp * game.boardWidthScale
                     val slotWidthDp = scaledWidthDp / game.cols
                     val hOverlap = 0.96f
                     val tileWidth = slotWidthDp * 1.15f
-                    val verticalCompression = 0.92f
+
+                    // --- Dynamic Overlap Logic ---
+                    val isAlphabetic = game.boardMode == "alphabetic"
+                    val verticalCompression = if (isAlphabetic) 0.82f else 0.92f // Increased compression for alphabet
+                    val vStretch = if (isAlphabetic) 1.45f else 1.25f // Increased stretch to close the gap
+
                     val slotHeightDp = (heightDp / game.rows) * verticalCompression
-                    val vStretch = 1.25f
                     val tileHeight = slotHeightDp * vStretch
                     val totalGridHeight = slotHeightDp * (game.rows - 1) + tileHeight
                     val verticalOffset = (heightDp - totalGridHeight) / 2f
 
-                    val baseOffsetX = if (game.boardWidthScale < 1f) (widthDp - scaledWidthDp) / 2f else 0.dp
-                    val boardOffsetX = if (game.boardMode == "custom") baseOffsetX + slotWidthDp else baseOffsetX
+                    val boardOffsetX = if (game.boardWidthScale < 1f) (widthDp - scaledWidthDp) / 2f else 0.dp
 
                     Box(modifier = Modifier.fillMaxSize().offset(x = boardOffsetX, y = verticalOffset)) {
                         for (r in 0 until game.rows) {
@@ -232,6 +232,7 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                                 }
                             }
                         }
+
                         game.lastPath?.let { path ->
                             val slotWidthPx = (widthPx * game.boardWidthScale) / game.cols
                             val slotHeightPx = (heightPx / game.rows) * verticalCompression
@@ -248,6 +249,10 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                             }
                         }
                     }
+                }
+
+                if (game.gameState == GameState.ABOUT) {
+                    InteractiveAboutDialog(onDismiss = { game.gameState = GameState.PLAYING })
                 }
             }
 
@@ -288,7 +293,7 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
             }
         }
 
-        if (game.gameState != GameState.PLAYING) {
+        if (game.gameState != GameState.PLAYING && game.gameState != GameState.ABOUT) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).zIndex(1500f), contentAlignment = Alignment.Center) {
                 when (game.gameState) {
                     GameState.PAUSED -> PauseDialog(onResume = { game.gameState = GameState.PLAYING }, onRetry = { game.retryGame() }, onNewGame = { game.initializeBoard() }, onExit = onExit)
@@ -296,7 +301,6 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                     GameState.SCORE -> ScoreDialog(game = game)
                     GameState.WON -> WinDialog(game = game)
                     GameState.NO_MOVES -> NoMovesDialog(onShuffle = { game.shuffleBoard() }, onNewGame = { game.initializeBoard() })
-                    GameState.ABOUT -> AboutDialog(onDismiss = { game.gameState = GameState.PLAYING })
                     else -> {}
                 }
             }
@@ -308,44 +312,27 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
 @Composable
 fun TileView(tile: Tile, isPaused: Boolean, isMatching: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     if (tile.isRemoved && !isMatching) return
-    val context = LocalContext.current
-    val tileImageId = remember(tile.imageName) { context.resources.getIdentifier(tile.imageName, "drawable", context.packageName) }
-    val backImageId = remember { context.resources.getIdentifier("tile_back", "drawable", context.packageName) }
-
-    // Use spring() instead of tween() to get a natural overshoot WITHOUT needing extra imports
-    val tileScale by animateFloatAsState(
-        targetValue = if (isMatching) 0f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
-        label = "tilePop"
-    )
-
-    val driftY by animateDpAsState(
-        targetValue = if (isMatching) (-40).dp else 0.dp,
-        animationSpec = tween(durationMillis = 500),
-        label = "tileDrift"
-    )
-
+    val tileImageId = remember(tile.imageName) { getTileDrawableId(tile.imageName) }
+    val backImageId = R.drawable.tile_back
+    val tileScale by animateFloatAsState(targetValue = if (isMatching) 0f else 1f, label = "tilePop")
+    val driftY by animateDpAsState(targetValue = if (isMatching) (-40).dp else 0.dp, label = "tileDrift")
     val alpha by if (isMatching) {
         val infiniteTransition = rememberInfiniteTransition(label = "flash")
-        infiniteTransition.animateFloat(
-            initialValue = 1f, targetValue = 0f,
-            animationSpec = infiniteRepeatable(animation = tween(250, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-            label = "alpha"
-        )
-    } else {
-        remember { mutableStateOf(1f) }
-    }
+        infiniteTransition.animateFloat(initialValue = 1f, targetValue = 0f, animationSpec = infiniteRepeatable(animation = tween(250, easing = LinearEasing), repeatMode = RepeatMode.Reverse), label = "alpha")
+    } else { remember { mutableFloatStateOf(1f) } }
 
-    Box(
-        modifier = modifier
-            .offset(y = driftY)
-            .scale(tileScale)
-            .alpha(alpha)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
-    ) {
+    Box(modifier = modifier.offset(y = driftY).scale(tileScale).alpha(alpha).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }) {
         val imageId = if (isPaused) backImageId else tileImageId
         if (imageId != 0) {
-            Image(painter = painterResource(id = imageId), contentDescription = "Game Tile", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            val isLetter = tile.imageName.startsWith("tile_letter")
+            Image(
+                painter = painterResource(id = imageId),
+                contentDescription = "Game Tile",
+                contentScale = if (isLetter) ContentScale.Fit else ContentScale.FillBounds,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(if (isLetter) 4.dp else 0.dp)
+            )
             if (!isPaused && (tile.isSelected || tile.isHint)) {
                 val highlightColor = if (tile.isSelected) Color(0x6600BFFF) else Color(0x44FFFF00)
                 Box(modifier = Modifier.fillMaxSize().padding(end = 4.dp, bottom = 6.dp).background(highlightColor, RoundedCornerShape(4.dp)).border(if (tile.isHint) 2.dp else 0.dp, Color.Yellow, RoundedCornerShape(4.dp)))
@@ -355,16 +342,132 @@ fun TileView(tile: Tile, isPaused: Boolean, isMatching: Boolean, onClick: () -> 
 }
 
 @Composable
+fun InteractiveAboutDialog(onDismiss: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    val gameTitle = remember {
+        listOf(
+            R.drawable.letter_r, R.drawable.letter_e, R.drawable.letter_k,
+            R.drawable.letter_l, R.drawable.letter_u, R.drawable.letter_z,
+            R.drawable.letter_g, R.drawable.letter_a, R.drawable.letter_m,
+            R.drawable.letter_e, R.drawable.letter_s
+        )
+    }
+    val creatorName = remember {
+        listOf(
+            R.drawable.letter_r, R.drawable.letter_i, R.drawable.letter_c, R.drawable.letter_o,
+            R.drawable.letter_l, R.drawable.letter_u, R.drawable.letter_z, R.drawable.letter_i
+        )
+    }
+    val clickedIndices = remember { mutableStateListOf<Int>() }
+    var showNamePopup by remember { mutableStateOf(false) }
+    var showPhotoPopup by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(2000f)
+            .background(Color(0xEE111111), RoundedCornerShape(24.dp))
+            .border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!showNamePopup && !showPhotoPopup) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text("Nikakudori Mahjong", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Box(modifier = Modifier.weight(0.5f)) {
+                        Text(text = "Nikakudori Mahjong is a traditional Japanese tile-matching puzzle game. Connect identical pairs using a path with no more than two 90-degree turns to clear the board.", color = Color.White, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Start)
+                    }
+                    Spacer(modifier = Modifier.width(20.dp))
+                    Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.Center) {
+                        LazyVerticalGrid(columns = GridCells.Fixed(6), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.width(200.dp), userScrollEnabled = false) {
+                            items(12) { index ->
+                                if (index < gameTitle.size) {
+                                    val tileRes = gameTitle[index]
+                                    val isClicked = clickedIndices.contains(index)
+                                    Card(shape = RoundedCornerShape(2.dp), modifier = Modifier.aspectRatio(0.61f).clickable(enabled = !isClicked) {
+                                        clickedIndices.add(index)
+                                        if (clickedIndices.size == 11) showNamePopup = true
+                                    }, colors = CardDefaults.cardColors(containerColor = if (isClicked) Color.Transparent else Color.White)) {
+                                        if (!isClicked) Image(painter = painterResource(id = tileRes), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                                    }
+                                } else { Spacer(modifier = Modifier.aspectRatio(0.61f)) }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(text = "View project on GitHub", color = Color(0xFF00BFFF), fontSize = 14.sp, textDecoration = TextDecoration.Underline, modifier = Modifier.clickable { uriHandler.openUri("https://github.com/rekluz/Nikakudori-Mahjong") })
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back to Game", color = Color.White) }
+            }
+        }
+
+        if (showNamePopup) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("This game was created by", color = Color.White, fontSize = 18.sp)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(horizontalArrangement = Arrangement.Center) {
+                        creatorName.forEachIndexed { index, tile ->
+                            TileImageSmall(tile)
+                            if (index == 3) Spacer(modifier = Modifier.width(8.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(30.dp))
+                    Button(onClick = { showNamePopup = false; showPhotoPopup = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Thanks for playing!") }
+                }
+            }
+        }
+
+        if (showPhotoPopup) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Developer Profile", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(Color.DarkGray)
+                            .border(2.dp, Color(0xFF00BFFF), CircleShape)
+                            .clickable { uriHandler.openUri("https://github.com/rekluz") }
+                            .padding(2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(painter = painterResource(id = R.drawable.my_photo), contentDescription = "Rico Luzi", modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Rico Luzi", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    Text("Lead Developer", color = Color.LightGray)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(onClick = { showPhotoPopup = false; clickedIndices.clear(); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back to Menu") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TileImageSmall(resId: Int) {
+    Box(modifier = Modifier.size(width = 24.dp, height = 38.dp)) {
+        Image(painter = painterResource(id = resId), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+    }
+}
+
+@Composable
 fun ScoreDialog(game: GameModel) {
     var selectedSize by remember { mutableStateOf(Triple(game.rows, game.cols, game.boardMode)) }
     val topScores = game.getTopScores(selectedSize.first, selectedSize.second, selectedSize.third)
-    val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"), Triple(8, 17, "custom"))
+    val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"))
+
     OverlayContainer {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("HALL OF FAME", color = Color.Yellow, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 sizes.forEach { (r, c, mode) ->
-                    val isSelected = selectedSize == Triple(r, c, mode)
+                    val isSelected = selectedSize.first == r && selectedSize.second == c
                     Text(text = game.getDifficultyLabel(r, c, mode), color = if (isSelected) Color.Yellow else Color.Gray, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.clickable { selectedSize = Triple(r, c, mode) }.padding(4.dp))
                 }
             }
@@ -428,53 +531,6 @@ fun NoMovesDialog(onShuffle: () -> Unit, onNewGame: () -> Unit) {
 }
 
 @Composable
-fun AboutDialog(onDismiss: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
-    val context = LocalContext.current
-
-    val versionName = remember {
-        try {
-            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0)
-            }
-            packageInfo.versionName ?: "3.0.2"
-        } catch (_: Exception) {
-            "3.0.2"
-        }
-    }
-
-    OverlayContainer {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Nikakudori Mahjong", color = Color.Yellow, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "A tile matching game by Rico @ Rekluz Games", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(text = "Version $versionName", color = Color.Gray, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Nikakudori Mahjong is a traditional Japanese tile-matching puzzle game. Connect identical pairs using a path with no more than two 90-degree turns to clear the board.",
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                fontSize = 14.sp
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "View Project on GitHub",
-                color = Color(0xFF00BFFF),
-                fontSize = 14.sp,
-                modifier = Modifier.clickable {
-                    uriHandler.openUri("https://github.com/rekluz/Nikakudori-Mahjong")
-                }
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            DialogButton("Close", onDismiss)
-        }
-    }
-}
-
-@Composable
 fun TimerPill(time: String) {
     Box(modifier = Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(Color(0x33FFFFFF)).border(1.dp, Color(0x66FFFFFF), CircleShape), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -511,20 +567,34 @@ fun PauseDialog(onResume: () -> Unit, onRetry: () -> Unit, onNewGame: () -> Unit
 @Composable
 fun OptionsDialog(game: GameModel, onDone: () -> Unit) {
     OverlayContainer {
-        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
-            Text("Options", color = Color.White, fontSize = 24.sp)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                SettingsRow(label = "Sound", isOn = game.isSoundEnabled, onToggle = { game.toggleSound(it) })
-                GridSizeToggle(game)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Background Color", color = Color.White, fontSize = 14.sp)
-                Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ColorOptionButton("Blue", Color(0xFF002147), game)
-                    ColorOptionButton("Green", Color(0xFF004D00), game)
-                    ColorOptionButton("Red", Color(0xFF4D0000), game)
+        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Options", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+
+            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.width(100.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Sound", color = Color.White, fontSize = 12.sp)
+                    Switch(
+                        checked = game.isSoundEnabled,
+                        onCheckedChange = { game.toggleSound(it) },
+                        modifier = Modifier.scale(0.8f),
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF00BFFF))
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Theme", color = Color.White, fontSize = 12.sp)
+                    Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ColorOptionCircle(Color(0xFF002147), game)
+                        ColorOptionCircle(Color(0xFF004D00), game)
+                        ColorOptionCircle(Color(0xFF4D0000), game)
+                    }
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    BoardGridSelector(game)
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 DialogButton("High Scores", { game.gameState = GameState.SCORE }, modifier = Modifier.weight(1f))
                 DialogButton("Done", onDone, modifier = Modifier.weight(1f))
@@ -534,73 +604,196 @@ fun OptionsDialog(game: GameModel, onDone: () -> Unit) {
 }
 
 @Composable
-fun GridSizeToggle(game: GameModel) {
-    val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"), Triple(8, 17, "custom"))
-    val currentIndex = sizes.indexOfFirst { it.first == game.rows && it.second == game.cols && it.third == game.boardMode }.coerceAtLeast(0)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Board Type", color = Color.White, fontSize = 14.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("<", color = Color.Yellow, fontSize = 32.sp, modifier = Modifier.padding(8.dp).clickable {
-                val next = if (currentIndex == 0) sizes.size - 1 else currentIndex - 1
-                val (rows, cols, mode) = sizes[next]
-                game.updateGridSize(rows, cols, mode)
-                game.gameState = GameState.OPTIONS
-            })
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(100.dp)) {
-                Text(game.getDifficultyLabel(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("${game.cols}x${game.rows}", color = Color.Gray, fontSize = 11.sp)
-            }
-            Text(">", color = Color.Yellow, fontSize = 32.sp, modifier = Modifier.padding(8.dp).clickable {
-                val next = (currentIndex + 1) % sizes.size
-                val (rows, cols, mode) = sizes[next]
-                game.updateGridSize(rows, cols, mode)
-                game.gameState = GameState.OPTIONS
-            })
-        }
-    }
-}
-
-@Composable
-fun SettingsRow(label: String, isOn: Boolean, onToggle: (Boolean) -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = Color.White, fontSize = 14.sp)
-        Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = { onToggle(true) }, colors = ButtonDefaults.buttonColors(containerColor = if (isOn) Color(0xFF00BFFF) else Color.Gray)) { Text("On", color = Color.White) }
-            Button(onClick = { onToggle(false) }, colors = ButtonDefaults.buttonColors(containerColor = if (!isOn) Color(0xFF00BFFF) else Color.Gray)) { Text("Off", color = Color.White) }
-        }
-    }
-}
-
-@Composable
-fun ColorOptionButton(label: String, color: Color, game: GameModel) {
+fun ColorOptionCircle(color: Color, game: GameModel) {
     val isSelected = game.bgThemeColor == color
-    Button(onClick = { game.bgThemeColor = color }, colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) Color(0xFF00BFFF) else Color.Gray)) { Text(label, color = Color.White) }
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) Color(0xFF00BFFF) else Color.White.copy(alpha = 0.5f),
+                shape = CircleShape
+            )
+            .clickable { game.bgThemeColor = color }
+    )
 }
 
 @Composable
-fun DialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier.fillMaxWidth(0.8f)) {
-    Button(onClick = onClick, modifier = modifier.padding(vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text(text, color = Color.White, fontWeight = FontWeight.Bold) }
+fun BoardGridSelector(game: GameModel) {
+    var activeCategory by remember { mutableStateOf(if(game.boardMode == "alphabetic") "Alphabetic" else "Traditional") }
+
+    val traditionalSizes = listOf(
+        Triple(5, 14, "standard"),
+        Triple(7, 16, "standard"),
+        Triple(8, 17, "standard"),
+        Triple(8, 21, "standard")
+    )
+
+    val alphabeticSizes = listOf(
+        Triple(5, 14, "alphabetic"),
+        Triple(7, 16, "alphabetic"),
+        Triple(8, 17, "alphabetic")
+    )
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0x11FFFFFF), RoundedCornerShape(8.dp))) {
+            CategoryTab("Traditional", activeCategory == "Traditional") { activeCategory = "Traditional" }
+            CategoryTab("Alphabetic", activeCategory == "Alphabetic") { activeCategory = "Alphabetic" }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val currentSizes = if (activeCategory == "Traditional") traditionalSizes else alphabeticSizes
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(currentSizes) { (rows, cols, mode) ->
+                val isSelected = game.rows == rows && game.cols == cols && game.boardMode == mode
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) Color(0xFF00BFFF) else Color(0x33FFFFFF))
+                        .border(1.dp, if (isSelected) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
+                        .clickable { game.updateGridSize(rows, cols, mode) }
+                        .padding(6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = game.getDifficultyLabel(rows, cols, mode),
+                            color = if (isSelected) Color.White else Color.LightGray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${cols}x${rows}",
+                            color = if (isSelected) Color.White.copy(alpha = 0.8f) else Color.Gray,
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryTab(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .height(30.dp)
+            .padding(2.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isSelected) Color(0x44FFFFFF) else Color.Transparent)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = label, color = if (isSelected) Color.Yellow else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun DialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(onClick = onClick, modifier = modifier.fillMaxWidth(0.8f).padding(vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text(text, color = Color.White) }
 }
 
 @Composable
 fun OverlayContainer(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.size(480.dp, 350.dp).background(Color(0xCC222222), RoundedCornerShape(8.dp)).border(2.dp, Color.Gray).padding(16.dp), contentAlignment = Alignment.Center) { content() }
+    Box(modifier = Modifier.size(width = 450.dp, height = 320.dp).background(Color(0xEE111111), RoundedCornerShape(24.dp)).border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) { content() }
 }
 
-class Particle(var x: Float, var y: Float, val color: Color) {
-    var vx = (Random.nextFloat() - 0.5f) * 15f
-    var vy = (Random.nextFloat() - 0.5f) * 15f
-    var alpha = 1f
-    fun update() { x += vx; y += vy; vy += 0.4f; alpha -= 0.025f }
-    fun draw(scope: DrawScope) { scope.drawCircle(color, 5f, Offset(x, y), alpha) }
+private fun getTileDrawableId(imageName: String): Int {
+    return when (imageName) {
+        "tile_dot_1" -> R.drawable.tile_dot_1
+        "tile_dot_2" -> R.drawable.tile_dot_2
+        "tile_dot_3" -> R.drawable.tile_dot_3
+        "tile_dot_4" -> R.drawable.tile_dot_4
+        "tile_dot_5" -> R.drawable.tile_dot_5
+        "tile_dot_6" -> R.drawable.tile_dot_6
+        "tile_dot_7" -> R.drawable.tile_dot_7
+        "tile_dot_8" -> R.drawable.tile_dot_8
+        "tile_dot_9" -> R.drawable.tile_dot_9
+        "tile_bamboo_1" -> R.drawable.tile_bamboo_1
+        "tile_bamboo_2" -> R.drawable.tile_bamboo_2
+        "tile_bamboo_3" -> R.drawable.tile_bamboo_3
+        "tile_bamboo_4" -> R.drawable.tile_bamboo_4
+        "tile_bamboo_5" -> R.drawable.tile_bamboo_5
+        "tile_bamboo_6" -> R.drawable.tile_bamboo_6
+        "tile_bamboo_7" -> R.drawable.tile_bamboo_7
+        "tile_bamboo_8" -> R.drawable.tile_bamboo_8
+        "tile_bamboo_9" -> R.drawable.tile_bamboo_9
+        "tile_char_1" -> R.drawable.tile_char_1
+        "tile_char_2" -> R.drawable.tile_char_2
+        "tile_char_3" -> R.drawable.tile_char_3
+        "tile_char_4" -> R.drawable.tile_char_4
+        "tile_char_5" -> R.drawable.tile_char_5
+        "tile_char_6" -> R.drawable.tile_char_6
+        "tile_char_7" -> R.drawable.tile_char_7
+        "tile_char_8" -> R.drawable.tile_char_8
+        "tile_char_9" -> R.drawable.tile_char_9
+        "tile_wind_e" -> R.drawable.tile_wind_e
+        "tile_wind_s" -> R.drawable.tile_wind_s
+        "tile_wind_w" -> R.drawable.tile_wind_w
+        "tile_wind_n" -> R.drawable.tile_wind_n
+        "tile_drag_r" -> R.drawable.tile_drag_r
+        "tile_drag_g" -> R.drawable.tile_drag_g
+        "tile_drag_b" -> R.drawable.tile_drag_b
+        "tile_letter_a" -> R.drawable.letter_a
+        "tile_letter_b" -> R.drawable.letter_b
+        "tile_letter_c" -> R.drawable.letter_c
+        "tile_letter_d" -> R.drawable.letter_d
+        "tile_letter_e" -> R.drawable.letter_e
+        "tile_letter_f" -> R.drawable.letter_f
+        "tile_letter_g" -> R.drawable.letter_g
+        "tile_letter_h" -> R.drawable.letter_h
+        "tile_letter_i" -> R.drawable.letter_i
+        "tile_letter_j" -> R.drawable.letter_j
+        "tile_letter_k" -> R.drawable.letter_k
+        "tile_letter_l" -> R.drawable.letter_l
+        "tile_letter_m" -> R.drawable.letter_m
+        "tile_letter_n" -> R.drawable.letter_n
+        "tile_letter_o" -> R.drawable.letter_o
+        "tile_letter_p" -> R.drawable.letter_p
+        "tile_letter_q" -> R.drawable.letter_q
+        "tile_letter_r" -> R.drawable.letter_r
+        "tile_letter_s" -> R.drawable.letter_s
+        "tile_letter_t" -> R.drawable.letter_t
+        "tile_letter_u" -> R.drawable.letter_u
+        "tile_letter_v" -> R.drawable.letter_v
+        "tile_letter_w" -> R.drawable.letter_w
+        "tile_letter_x" -> R.drawable.letter_x
+        "tile_letter_y" -> R.drawable.letter_y
+        "tile_letter_z" -> R.drawable.letter_z
+        else -> 0
+    }
 }
 
 class Firework(var x: Float, var y: Float, val color: Color) {
-    private val particles = List(25) { Particle(x, y, color) }
+    private val particles = List(30) { Particle(x, y, color) }
     var isDone = false
     fun update() {
-        particles.forEach { it.update() }
-        if (particles.all { it.alpha <= 0f }) isDone = true
+        var allDone = true
+        particles.forEach { it.update(); if (!it.isDone) allDone = false }
+        isDone = allDone
     }
     fun draw(scope: DrawScope) { particles.forEach { it.draw(scope) } }
+}
+
+class Particle(var x: Float, var y: Float, val color: Color) {
+    private var vx = (Random.nextFloat() - 0.5f) * 15f
+    private var vy = (Random.nextFloat() - 0.5f) * 15f
+    private var alpha = 1f
+    var isDone = false
+    fun update() {
+        x += vx; y += vy; vy += 0.2f; alpha -= 0.015f
+        if (alpha <= 0) isDone = true
+    }
+    fun draw(scope: DrawScope) { if (!isDone) scope.drawCircle(color = color, radius = 4f, center = Offset(x, y), alpha = alpha) }
 }
