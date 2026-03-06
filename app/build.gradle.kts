@@ -16,8 +16,8 @@ android {
         // Target 36 to align with the latest Android standards and remove warnings
         targetSdk = 36
 
-        versionCode = 26030502
-        versionName = "3.0.5"
+        versionCode = 26030503
+        versionName = "3.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
