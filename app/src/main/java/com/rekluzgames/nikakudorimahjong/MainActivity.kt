@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -47,6 +48,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
@@ -71,10 +73,44 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+// --- Helper Classes ---
+
+class Firework(val x: Float, val y: Float, val color: Color) {
+    private var alpha = 1f
+    private val particles = List(20) {
+        val angle = Random.nextFloat() * 2 * Math.PI
+        val speed = Random.nextFloat() * 5 + 2
+        Offset(Math.cos(angle).toFloat() * speed, Math.sin(angle).toFloat() * speed)
+    }
+    private var frame = 0
+    var isDone = false
+
+    fun update() {
+        frame++
+        alpha -= 0.02f
+        if (alpha <= 0) isDone = true
+    }
+
+    fun draw(scope: DrawScope) {
+        particles.forEach { p ->
+            scope.drawCircle(
+                color = color.copy(alpha = alpha),
+                radius = 4f,
+                center = Offset(x + p.x * frame, y + p.y * frame)
+            )
+        }
+    }
+}
+
+// --- Factory & Activity ---
+
 class GameViewModelFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        @Suppress("UNCHECKED_CAST")
-        return GameViewModel(context) as T
+        if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return GameViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 
@@ -107,10 +143,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = game.bgThemeColor
-                ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = game.bgThemeColor) {
                     ShisenShoScreen(game = game, onExit = { finish() })
                 }
             }
@@ -193,7 +226,6 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                     val tileHeight = slotHeightDp * vStretch
                     val totalGridHeight = slotHeightDp * (game.rows - 1) + tileHeight
                     val verticalOffset = (heightDp - totalGridHeight) / 2f
-
                     val boardOffsetX = if (game.boardWidthScale < 1f) (widthDp - scaledWidthDp) / 2f else 0.dp
 
                     Box(modifier = Modifier.fillMaxSize().offset(x = boardOffsetX, y = verticalOffset)) {
@@ -251,27 +283,15 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
             }
 
             Column(
-                modifier = Modifier
-                    .width(120.dp)
-                    .fillMaxHeight()
-                    .padding(vertical = 12.dp, horizontal = 4.dp)
-                    .background(Color(0x66000000), RoundedCornerShape(16.dp))
-                    .padding(8.dp),
+                modifier = Modifier.width(120.dp).fillMaxHeight().padding(vertical = 12.dp, horizontal = 4.dp)
+                    .background(Color(0x66000000), RoundedCornerShape(16.dp)).padding(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
                     MenuPillButton("MENU") { game.gameState = GameState.PAUSED }
-
                     if (game.showAutocompletePrompt) {
-                        MenuPillButton("FINISH IT!", bgColor = Color(0xFFFFA500)) {
-                            game.startAutocomplete(view)
-                        }
+                        MenuPillButton("FINISH IT!", bgColor = Color(0xFFFFA500)) { game.startAutocomplete(view) }
                     }
-
                     val hintAvailable = game.isHintAvailable
                     val hintLabel = if (hintAvailable) "HINT" else "HINT (${game.hintSecondsRemaining})"
                     MenuPillButton(hintLabel, enabled = hintAvailable) { game.showHint() }
@@ -279,10 +299,8 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                     MenuPillButton("UNDO", enabled = game.canUndo) { game.undoLastMove() }
                     MenuPillButton("OPTIONS") { game.gameState = GameState.OPTIONS }
                     MenuPillButton("ABOUT") { game.gameState = GameState.ABOUT }
-
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-
                 TimerPill(game.formatTime())
             }
         }
@@ -304,7 +322,7 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
 }
 
 @Composable
-fun TileView(tile: Tile, isPaused: Boolean, isMatching: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TileView(tile: Tile, modifier: Modifier, isPaused: Boolean, isMatching: Boolean, onClick: () -> Unit) {
     if (tile.isRemoved && !isMatching) return
     val tileImageId = remember(tile.imageName) { getTileDrawableId(tile.imageName) }
     val backImageId = R.drawable.tile_back
@@ -330,36 +348,29 @@ fun TileView(tile: Tile, isPaused: Boolean, isMatching: Boolean, onClick: () -> 
 @Composable
 fun InteractiveAboutDialog(onDismiss: () -> Unit) {
     val uriHandler = LocalUriHandler.current
-    val gameTitle = remember {
-        listOf(
-            R.drawable.letter_r, R.drawable.letter_e, R.drawable.letter_k,
-            R.drawable.letter_l, R.drawable.letter_u, R.drawable.letter_z,
-            R.drawable.letter_g, R.drawable.letter_a, R.drawable.letter_m,
-            R.drawable.letter_e, R.drawable.letter_s
-        )
+    val context = LocalContext.current
+    val versionName = remember {
+        try {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            packageInfo.versionName ?: "3.0.6"
+        } catch (e: Exception) { "3.0.6" }
     }
-    val creatorName = remember {
-        listOf(
-            R.drawable.letter_r, R.drawable.letter_i, R.drawable.letter_c, R.drawable.letter_o,
-            R.drawable.letter_l, R.drawable.letter_u, R.drawable.letter_z, R.drawable.letter_i
-        )
-    }
+    val gameTitle = remember { listOf(R.drawable.letter_r, R.drawable.letter_e, R.drawable.letter_k, R.drawable.letter_l, R.drawable.letter_u, R.drawable.letter_z, R.drawable.letter_g, R.drawable.letter_a, R.drawable.letter_m, R.drawable.letter_e, R.drawable.letter_s) }
+    val creatorName = remember { listOf(R.drawable.letter_r, R.drawable.letter_i, R.drawable.letter_c, R.drawable.letter_o, R.drawable.letter_l, R.drawable.letter_u, R.drawable.letter_z, R.drawable.letter_i) }
     val clickedIndices = remember { mutableStateListOf<Int>() }
     var showNamePopup by remember { mutableStateOf(false) }
     var showPhotoPopup by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .zIndex(2000f)
-            .background(Color(0xEE111111), RoundedCornerShape(24.dp))
-            .border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp))
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize().zIndex(2000f).background(Color(0xEE111111), RoundedCornerShape(24.dp)).border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) {
         if (!showNamePopup && !showPhotoPopup) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text("Nikakudori Mahjong", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                Text(text = "Version $versionName", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Box(modifier = Modifier.weight(0.5f)) {
@@ -389,39 +400,23 @@ fun InteractiveAboutDialog(onDismiss: () -> Unit) {
                 Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back to Game", color = Color.White) }
             }
         }
-
         if (showNamePopup) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("This game was created by", color = Color.White, fontSize = 18.sp)
                     Spacer(modifier = Modifier.height(20.dp))
-                    Row(horizontalArrangement = Arrangement.Center) {
-                        creatorName.forEachIndexed { index, tile ->
-                            TileImageSmall(tile)
-                            if (index == 3) Spacer(modifier = Modifier.width(8.dp))
-                        }
-                    }
+                    Row(horizontalArrangement = Arrangement.Center) { creatorName.forEachIndexed { index, tile -> TileImageSmall(tile); if (index == 3) Spacer(modifier = Modifier.width(8.dp)) } }
                     Spacer(modifier = Modifier.height(30.dp))
                     Button(onClick = { showNamePopup = false; showPhotoPopup = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Thanks for playing!") }
                 }
             }
         }
-
         if (showPhotoPopup) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Developer Profile", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Hello World!", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(Color.DarkGray)
-                            .border(2.dp, Color(0xFF00BFFF), CircleShape)
-                            .clickable { uriHandler.openUri("https://github.com/rekluz") }
-                            .padding(2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.size(120.dp).clip(CircleShape).background(Color.DarkGray).border(2.dp, Color(0xFF00BFFF), CircleShape).clickable { uriHandler.openUri("https://github.com/rekluz") }.padding(2.dp), contentAlignment = Alignment.Center) {
                         Image(painter = painterResource(id = R.drawable.my_photo), contentDescription = "Rico Luzi", modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -447,7 +442,6 @@ fun ScoreDialog(game: GameModel) {
     var selectedSize by remember { mutableStateOf(Triple(game.rows, game.cols, "standard")) }
     val topScores = game.getTopScores(selectedSize.first, selectedSize.second, "standard")
     val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"))
-
     OverlayContainer {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("HALL OF FAME", color = Color.Yellow, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
@@ -496,10 +490,7 @@ fun WinDialog(game: GameModel) {
                 if (name.isEmpty()) Text("___", color = Color(0x66FFFFFF), fontSize = 24.sp, letterSpacing = 4.sp)
             }
             Spacer(modifier = Modifier.height(16.dp))
-            DialogButton("Save & View Scores", onClick = {
-                game.saveScore(name.ifBlank { "???" }, game.timeSeconds)
-                game.gameState = GameState.SCORE
-            })
+            DialogButton("Save & View Scores", onClick = { game.saveScore(name.ifBlank { "???" }, game.timeSeconds); game.gameState = GameState.SCORE })
         }
     }
 }
@@ -555,174 +546,49 @@ fun OptionsDialog(game: GameModel, onDone: () -> Unit) {
     OverlayContainer {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
             Text("Options", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Sound Effects", color = Color.White, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Switch(
-                        checked = game.isSoundEnabled,
-                        onCheckedChange = { game.toggleSound(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF00BFFF),
-                            uncheckedThumbColor = Color.Gray,
-                            uncheckedTrackColor = Color(0xFF333333)
-                        )
-                    )
+                    Switch(checked = game.isSoundEnabled, onCheckedChange = { game.toggleSound(it) }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF00BFFF), uncheckedThumbColor = Color.Gray, uncheckedTrackColor = Color(0xFF333333)))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Background Theme", color = Color.White, fontSize = 14.sp)
-                    Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ColorOptionCircle(Color(0xFF002147), game)
-                        ColorOptionCircle(Color(0xFF004D00), game)
-                        ColorOptionCircle(Color(0xFF4D0000), game)
-                    }
+                    Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { ColorOptionCircle(Color(0xFF002147), game); ColorOptionCircle(Color(0xFF004D00), game); ColorOptionCircle(Color(0xFF4D0000), game) }
                 }
-                BoardGridSelector(game)
             }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                DialogButton("High Scores", { game.gameState = GameState.SCORE }, modifier = Modifier.weight(1f))
-                DialogButton("Done", onDone, modifier = Modifier.weight(1f))
-            }
+            DialogButton("Done", onDone)
         }
     }
 }
 
 @Composable
 fun ColorOptionCircle(color: Color, game: GameModel) {
-    val isSelected = game.bgThemeColor == color
-    Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) Color(0xFF00BFFF) else Color.White.copy(alpha = 0.5f),
-                shape = CircleShape
-            )
-            .clickable { game.bgThemeColor = color }
-    )
-}
-
-@Composable
-fun BoardGridSelector(game: GameModel) {
-    val sizes = listOf(
-        Triple(5, 14, "standard"),
-        Triple(7, 16, "standard"),
-        Triple(8, 17, "standard"),
-        Triple(8, 21, "standard")
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(200.dp)) {
-        Text("Board Type", color = Color.White, fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.height(140.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(sizes) { (rows, cols, mode) ->
-                val isSelected = game.rows == rows && game.cols == cols
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Color(0xFF00BFFF) else Color(0x33FFFFFF))
-                        .border(1.dp, if (isSelected) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
-                        .clickable { game.updateGridSize(rows, cols, mode) }
-                        .padding(6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = game.getDifficultyLabel(rows, cols, mode),
-                            color = if (isSelected) Color.White else Color.LightGray,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${cols}x${rows}",
-                            color = if (isSelected) Color.White.copy(alpha = 0.8f) else Color.Gray,
-                            fontSize = 9.sp
-                        )
-                    }
-                }
-            }
-        }
-    }
+    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (game.bgThemeColor == color) 3.dp else 1.dp, if (game.bgThemeColor == color) Color.Yellow else Color.White, CircleShape).clickable { game.bgThemeColor = color })
 }
 
 @Composable
 fun DialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(onClick = onClick, modifier = modifier.fillMaxWidth(0.8f).padding(vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text(text, color = Color.White) }
+    Button(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color(0x66FFFFFF))
+    ) {
+        Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable
-fun OverlayContainer(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.size(width = 450.dp, height = 320.dp).background(Color(0xEE111111), RoundedCornerShape(24.dp)).border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) { content() }
-}
-
-private fun getTileDrawableId(imageName: String): Int {
-    return when (imageName) {
-        "tile_dot_1" -> R.drawable.tile_dot_1
-        "tile_dot_2" -> R.drawable.tile_dot_2
-        "tile_dot_3" -> R.drawable.tile_dot_3
-        "tile_dot_4" -> R.drawable.tile_dot_4
-        "tile_dot_5" -> R.drawable.tile_dot_5
-        "tile_dot_6" -> R.drawable.tile_dot_6
-        "tile_dot_7" -> R.drawable.tile_dot_7
-        "tile_dot_8" -> R.drawable.tile_dot_8
-        "tile_dot_9" -> R.drawable.tile_dot_9
-        "tile_bamboo_1" -> R.drawable.tile_bamboo_1
-        "tile_bamboo_2" -> R.drawable.tile_bamboo_2
-        "tile_bamboo_3" -> R.drawable.tile_bamboo_3
-        "tile_bamboo_4" -> R.drawable.tile_bamboo_4
-        "tile_bamboo_5" -> R.drawable.tile_bamboo_5
-        "tile_bamboo_6" -> R.drawable.tile_bamboo_6
-        "tile_bamboo_7" -> R.drawable.tile_bamboo_7
-        "tile_bamboo_8" -> R.drawable.tile_bamboo_8
-        "tile_bamboo_9" -> R.drawable.tile_bamboo_9
-        "tile_char_1" -> R.drawable.tile_char_1
-        "tile_char_2" -> R.drawable.tile_char_2
-        "tile_char_3" -> R.drawable.tile_char_3
-        "tile_char_4" -> R.drawable.tile_char_4
-        "tile_char_5" -> R.drawable.tile_char_5
-        "tile_char_6" -> R.drawable.tile_char_6
-        "tile_char_7" -> R.drawable.tile_char_7
-        "tile_char_8" -> R.drawable.tile_char_8
-        "tile_char_9" -> R.drawable.tile_char_9
-        "tile_wind_e" -> R.drawable.tile_wind_e
-        "tile_wind_s" -> R.drawable.tile_wind_s
-        "tile_wind_w" -> R.drawable.tile_wind_w
-        "tile_wind_n" -> R.drawable.tile_wind_n
-        "tile_drag_r" -> R.drawable.tile_drag_r
-        "tile_drag_g" -> R.drawable.tile_drag_g
-        "tile_drag_b" -> R.drawable.tile_drag_b
-        else -> 0
+fun OverlayContainer(content: @Composable ColumnScope.() -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+        Column(modifier = Modifier.width(360.dp).padding(24.dp).background(Color(0xFF1A1A1A), RoundedCornerShape(16.dp)).border(2.dp, Color.Yellow.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) { content() }
     }
 }
 
-class Firework(var x: Float, var y: Float, val color: Color) {
-    private val particles = List(30) { Particle(x, y, color) }
-    var isDone = false
-    fun update() {
-        var allDone = true
-        particles.forEach { it.update(); if (!it.isDone) allDone = false }
-        isDone = allDone
-    }
-    fun draw(scope: DrawScope) { particles.forEach { it.draw(scope) } }
-}
-
-class Particle(var x: Float, var y: Float, val color: Color) {
-    private var vx = (Random.nextFloat() - 0.5f) * 15f
-    private var vy = (Random.nextFloat() - 0.5f) * 15f
-    private var alpha = 1f
-    var isDone = false
-    fun update() {
-        x += vx; y += vy; vy += 0.2f; alpha -= 0.015f
-        if (alpha <= 0) isDone = true
-    }
-    fun draw(scope: DrawScope) { if (!isDone) scope.drawCircle(color = color, radius = 4f, center = Offset(x, y), alpha = alpha) }
+fun getTileDrawableId(name: String): Int {
+    return try {
+        val field = R.drawable::class.java.getField(name)
+        field.getInt(null)
+    } catch (e: Exception) { 0 }
 }
