@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Rekluz Games. All rights reserved.
+ * This code and its assets are the exclusive property of Rekluz Games.
+ * Unauthorized copying, distribution, or commercial use is strictly prohibited.
+ */
+// Last Updated: March 6, 2026 - Rekluz Games
+
 package com.rekluzgames.nikakudorimahjong
 
 import android.content.Context
@@ -16,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.*
+import kotlin.random.Random
 
 // ViewModel ensures the GameModel survives screen rotations
 class GameViewModel(context: Context) : ViewModel() {
@@ -36,7 +44,7 @@ data class Tile(
 )
 
 enum class GameState {
-    PLAYING, PAUSED, OPTIONS, SCORE, WON, NO_MOVES, ABOUT
+    PLAYING, PAUSED, OPTIONS, SCORE, WON, NO_MOVES, ABOUT, BOARDS
 }
 
 class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
@@ -44,10 +52,11 @@ class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
         .setMaxStreams(5)
         .build()
 
-    private val clickSoundId = loadSoundResource(R.raw.tile_click)
-    private val errorSoundId = loadSoundResource(R.raw.tile_error)
-    private val matchSoundId = loadSoundResource(R.raw.tile_match)
-    private val victorySoundId = loadSoundResource(R.raw.tile_tada)
+    // Changed to var to allow re-initialization if toggle is flipped
+    private var clickSoundId = loadSoundResource(R.raw.tile_click)
+    private var errorSoundId = loadSoundResource(R.raw.tile_error)
+    private var matchSoundId = loadSoundResource(R.raw.tile_match)
+    private var victorySoundId = loadSoundResource(R.raw.tile_tada)
 
     private fun loadSoundResource(resId: Int): Int {
         return if (resId != 0) {
@@ -101,6 +110,14 @@ class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
     fun toggleSound(enabled: Boolean) {
         isSoundEnabled = enabled
         prefs.edit { putBoolean("sound_enabled", enabled) }
+
+        // Attempt to reload sounds if they are currently invalid
+        if (enabled && clickSoundId == 0) {
+            clickSoundId = loadSoundResource(R.raw.tile_click)
+            errorSoundId = loadSoundResource(R.raw.tile_error)
+            matchSoundId = loadSoundResource(R.raw.tile_match)
+            victorySoundId = loadSoundResource(R.raw.tile_tada)
+        }
     }
 
     var bgThemeColor by mutableStateOf(Color(0xFF002147))
@@ -169,6 +186,7 @@ class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
         val tilesList = mutableListOf<Tile>()
         var typeIndex = 0
 
+        // Create pairs of tiles
         while (tilesList.size < totalTiles) {
             val name = tileTypes[typeIndex % tileTypes.size]
             repeat(2) {
@@ -179,29 +197,53 @@ class GameModel(initialRows: Int, initialCols: Int, val context: Context) {
             typeIndex++
         }
 
-        var attempts = 0
-        var validBoard = false
-        var potentialBoard: List<List<Tile>> = emptyList()
+        var potentialBoard: List<List<Tile>>
 
-        while (!validBoard && attempts < 100) {
+        do {
             tilesList.shuffle()
-            potentialBoard = List(rows) { r -> List(cols) { c -> tilesList[r * cols + c] } }
-            if (hasAtLeastOneMove(potentialBoard)) {
-                validBoard = true
+            potentialBoard = List(rows) { r ->
+                List(cols) { c ->
+                    tilesList[r * cols + c]
+                }
             }
-            attempts++
-        }
+        } while (countValidMoves(potentialBoard) < 2)
 
         board = potentialBoard
         initialBoardState = board.map { it.toList() }
         resetGameStats()
     }
 
+    private fun countValidMoves(checkBoard: List<List<Tile>>): Int {
+        var moveCount = 0
+        val activeTiles = mutableListOf<Pair<Int, Int>>()
+
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                activeTiles.add(r to c)
+            }
+        }
+
+        for (i in activeTiles.indices) {
+            for (j in i + 1 until activeTiles.size) {
+                val p1 = activeTiles[i]
+                val p2 = activeTiles[j]
+
+                if (checkBoard[p1.first][p1.second].imageName == checkBoard[p2.first][p2.second].imageName) {
+                    if (findConnectionPath(p1.first, p1.second, p2.first, p2.second, checkBoard) != null) {
+                        moveCount++
+                        if (moveCount >= 3) return moveCount
+                    }
+                }
+            }
+        }
+        return moveCount
+    }
+
     private fun hasAtLeastOneMove(checkBoard: List<List<Tile>>): Boolean {
         val activeTiles = mutableListOf<Pair<Int, Int>>()
         for (r in 0 until rows) {
             for (c in 0 until cols) {
-                if (!checkBoard[r][c].isRemoved) activeTiles.add(r to c)
+                activeTiles.add(r to c)
             }
         }
 

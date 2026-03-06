@@ -3,10 +3,11 @@
  * This code and its assets are the exclusive property of Rekluz Games.
  * Unauthorized copying, distribution, or commercial use is strictly prohibited.
  */
-// Last Updated: March 5, 2026 - Rekluz Games
+// Last Updated: March 6, 2026 - Rekluz Games
 
 package com.rekluzgames.nikakudorimahjong
 
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -47,6 +48,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
@@ -56,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,10 +74,49 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+// --- SUPPORTING DATA CLASSES & HELPERS ---
+
+class Firework(var x: Float, var y: Float, val color: Color) {
+    var alpha = 1f
+    var isDone = false
+    private val particles = List(20) {
+        Offset(Random.nextFloat() * 10f - 5f, Random.nextFloat() * 10f - 5f)
+    }
+    private var frame = 0
+
+    fun update() {
+        frame++
+        alpha -= 0.02f
+        if (alpha <= 0) isDone = true
+    }
+
+    fun draw(scope: DrawScope) {
+        particles.forEach { velocity ->
+            scope.drawCircle(
+                color = color,
+                radius = 4f,
+                center = Offset(x + velocity.x * frame, y + velocity.y * frame),
+                alpha = alpha
+            )
+        }
+    }
+}
+
+@Composable
+fun getTileDrawableId(name: String): Int {
+    val context = LocalContext.current
+    return remember(name) {
+        context.resources.getIdentifier(name, "drawable", context.packageName)
+    }
+}
+
 class GameViewModelFactory(private val context: android.content.Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        @Suppress("UNCHECKED_CAST")
-        return GameViewModel(context) as T
+        if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return GameViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 
@@ -179,8 +221,8 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
         Row(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Box(modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp).onGloballyPositioned { containerSize = it.size }) {
                 if (containerSize.width > 0) {
-                    val widthPx = containerSize.width.toFloat()
-                    val heightPx = containerSize.height.toFloat()
+                    val widthPx = containerSize.width.ScFloat()
+                    val heightPx = containerSize.height.ScFloat()
                     val widthDp = with(density) { widthPx.toDp() }
                     val heightDp = with(density) { heightPx.toDp() }
                     val scaledWidthDp = widthDp * game.boardWidthScale
@@ -207,7 +249,7 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                                         modifier = Modifier
                                             .size(tileWidth, tileHeight)
                                             .offset(x = (slotWidthDp * hOverlap * c), y = (slotHeightDp * r))
-                                            .zIndex(if (isMatching) 1000f else (r * game.cols + c).toFloat()),
+                                            .zIndex(if (isMatching) 1000f else (r * game.cols + c).ScFloat()),
                                         isPaused = isPaused,
                                         isMatching = isMatching,
                                         onClick = {
@@ -246,7 +288,7 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                 }
 
                 if (game.gameState == GameState.ABOUT) {
-                    InteractiveAboutDialog(onDismiss = { game.gameState = GameState.PLAYING })
+                    InteractiveAboutDialog(onDismiss = { game.gameState = GameState.PAUSED })
                 }
             }
 
@@ -277,8 +319,8 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
                     MenuPillButton(hintLabel, enabled = hintAvailable) { game.showHint() }
                     MenuPillButton("SHUFFLE (${game.shufflesRemaining})", enabled = game.canShuffle) { game.shuffleBoard() }
                     MenuPillButton("UNDO", enabled = game.canUndo) { game.undoLastMove() }
-                    MenuPillButton("OPTIONS") { game.gameState = GameState.OPTIONS }
-                    MenuPillButton("ABOUT") { game.gameState = GameState.ABOUT }
+                    MenuPillButton("SETTINGS") { game.gameState = GameState.OPTIONS }
+                    MenuPillButton("BOARDS") { game.gameState = GameState.BOARDS }
 
                     Spacer(modifier = Modifier.height(16.dp))
                 }
@@ -290,8 +332,15 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
         if (game.gameState != GameState.PLAYING && game.gameState != GameState.ABOUT) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).zIndex(1500f), contentAlignment = Alignment.Center) {
                 when (game.gameState) {
-                    GameState.PAUSED -> PauseDialog(onResume = { game.gameState = GameState.PLAYING }, onRetry = { game.retryGame() }, onNewGame = { game.initializeBoard() }, onExit = onExit)
+                    GameState.PAUSED -> PauseDialog(
+                        onNewGame = { game.initializeBoard() },
+                        onRetry = { game.retryGame() },
+                        onResume = { game.gameState = GameState.PLAYING },
+                        onAbout = { game.gameState = GameState.ABOUT },
+                        onExit = onExit
+                    )
                     GameState.OPTIONS -> OptionsDialog(game = game, onDone = { game.gameState = GameState.PLAYING })
+                    GameState.BOARDS -> BoardSelectionDialog(game = game, onDismiss = { game.gameState = GameState.PLAYING })
                     GameState.SCORE -> ScoreDialog(game = game)
                     GameState.WON -> WinDialog(game = game)
                     GameState.NO_MOVES -> NoMovesDialog(onShuffle = { game.shuffleBoard() }, onNewGame = { game.initializeBoard() })
@@ -303,22 +352,24 @@ fun ShisenShoScreen(game: GameModel, onExit: () -> Unit) {
     }
 }
 
+private fun Int.ScFloat(): Float = this.toFloat()
+
 @Composable
 fun TileView(tile: Tile, isPaused: Boolean, isMatching: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     if (tile.isRemoved && !isMatching) return
-    val tileImageId = remember(tile.imageName) { getTileDrawableId(tile.imageName) }
+    val tileImageId = getTileDrawableId(tile.imageName)
     val backImageId = R.drawable.tile_back
-    val tileScale by animateFloatAsState(targetValue = if (isMatching) 0f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow), label = "tilePop")
-    val driftY by animateDpAsState(targetValue = if (isMatching) (-40).dp else 0.dp, animationSpec = tween(durationMillis = 500), label = "tileDrift")
+    val tileScale by animateFloatAsState(targetValue = if (isMatching) 0f else 1f, label = "tilePop")
+    val driftY by animateDpAsState(targetValue = if (isMatching) (-40).dp else 0.dp, animationSpec = tween(500), label = "tileDrift")
     val alpha by if (isMatching) {
         val infiniteTransition = rememberInfiniteTransition(label = "flash")
-        infiniteTransition.animateFloat(initialValue = 1f, targetValue = 0f, animationSpec = infiniteRepeatable(animation = tween(250, easing = LinearEasing), repeatMode = RepeatMode.Reverse), label = "alpha")
+        infiniteTransition.animateFloat(1f, 0f, infiniteRepeatable(tween(250, easing = LinearEasing), RepeatMode.Reverse), label = "alpha")
     } else { remember { mutableFloatStateOf(1f) } }
 
     Box(modifier = modifier.offset(y = driftY).scale(tileScale).alpha(alpha).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }) {
         val imageId = if (isPaused) backImageId else tileImageId
         if (imageId != 0) {
-            Image(painter = painterResource(id = imageId), contentDescription = "Game Tile", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            Image(painter = painterResource(id = imageId), contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
             if (!isPaused && (tile.isSelected || tile.isHint)) {
                 val highlightColor = if (tile.isSelected) Color(0x6600BFFF) else Color(0x44FFFF00)
                 Box(modifier = Modifier.fillMaxSize().padding(end = 4.dp, bottom = 6.dp).background(highlightColor, RoundedCornerShape(4.dp)).border(if (tile.isHint) 2.dp else 0.dp, Color.Yellow, RoundedCornerShape(4.dp)))
@@ -327,9 +378,200 @@ fun TileView(tile: Tile, isPaused: Boolean, isMatching: Boolean, onClick: () -> 
     }
 }
 
+// --- STANDARDIZED CONTAINER FOR CONSISTENCY ---
+
+@Composable
+fun FullscreenDialogContainer(content: @Composable ColumnScope.() -> Unit) {
+    Box(
+        modifier = Modifier
+            .width(500.dp)
+            .fillMaxHeight()
+            .padding(vertical = 16.dp)
+            .background(Color(0xEE111111), RoundedCornerShape(24.dp))
+            .border(2.dp, Color(0x44FFFFFF), RoundedCornerShape(24.dp))
+            .padding(horizontal = 48.dp, vertical = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun BoardSelectionDialog(game: GameModel, onDismiss: () -> Unit) {
+    val boardOptions = listOf(
+        "EASY" to (5 to 14),
+        "NORMAL" to (7 to 16),
+        "HARD" to (8 to 17),
+        "EXTREME" to (8 to 21)
+    )
+
+    FullscreenDialogContainer {
+        Text("SELECT BOARD", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            userScrollEnabled = false
+        ) {
+            items(boardOptions) { (label, size) ->
+                val isCurrent = game.rows == size.first && game.cols == size.second
+
+                val infiniteTransition = rememberInfiniteTransition(label = "borderPulse")
+                val animatedThickness by if (isCurrent) {
+                    infiniteTransition.animateValue(
+                        initialValue = 2.dp,
+                        targetValue = 5.dp,
+                        typeConverter = Dp.VectorConverter,
+                        animationSpec = infiniteRepeatable(
+                            tween(1000, easing = FastOutSlowInEasing),
+                            RepeatMode.Reverse
+                        ),
+                        label = "thickness"
+                    )
+                } else {
+                    remember { mutableStateOf(0.dp) }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .height(80.dp)
+                        .clickable {
+                            game.updateGridSize(size.first, size.second)
+                            onDismiss()
+                        },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isCurrent) Color(0xFF00BFFF) else Color(0x22FFFFFF)
+                    ),
+                    border = if (isCurrent) borderStroke(animatedThickness, Color.Yellow) else null
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("${size.first} x ${size.second}", color = Color.LightGray, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+        DialogButton("BACK", onDismiss, modifier = Modifier.width(200.dp))
+    }
+}
+
+@Composable
+fun PauseDialog(
+    onNewGame: () -> Unit,
+    onRetry: () -> Unit,
+    onResume: () -> Unit,
+    onAbout: () -> Unit,
+    onExit: () -> Unit
+) {
+    FullscreenDialogContainer {
+        Text("Menu", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            DialogButton("NEW GAME", onNewGame, modifier = Modifier.weight(1f))
+            DialogButton("RETRY GAME", onRetry, modifier = Modifier.weight(1f))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            DialogButton("RESUME", onResume, modifier = Modifier.weight(1f))
+            DialogButton("ABOUT", onAbout, modifier = Modifier.weight(1f))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        DialogButton("EXIT", onExit, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+fun OptionsDialog(game: GameModel, onDone: () -> Unit) {
+    val backgroundColors = listOf(
+        Color(0xFF1B5E20), Color(0xFF0D47A1), Color(0xFF311B92), Color(0xFF000000), Color(0xFF3E2723)
+    )
+
+    FullscreenDialogContainer {
+        Text("SETTINGS", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Background Theme", color = Color.Gray, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                backgroundColors.forEach { color ->
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp).clip(CircleShape).background(color)
+                            .border(
+                                width = if (game.bgThemeColor == color) 3.dp else 1.dp,
+                                color = if (game.bgThemeColor == color) Color.Yellow else Color.White.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                            .clickable { game.bgThemeColor = color }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(32.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.Start, modifier = Modifier.width(220.dp)) {
+                Text("Board Scale", color = Color.Gray, fontSize = 12.sp)
+                Slider(
+                    value = game.boardWidthScale,
+                    onValueChange = { game.boardWidthScale = it },
+                    valueRange = 0.5f..1.0f,
+                    colors = SliderDefaults.colors(thumbColor = Color.Yellow, activeTrackColor = Color.Yellow)
+                )
+            }
+
+            Column(horizontalAlignment = Alignment.Start) {
+                Text("Sound Effects", color = Color.Gray, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Switch(
+                    checked = game.isSoundEnabled,
+                    onCheckedChange = { game.toggleSound(it) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.Yellow, checkedTrackColor = Color(0xFF00BFFF))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        DialogButton("DONE", onDone, modifier = Modifier.width(200.dp))
+    }
+}
+
 @Composable
 fun InteractiveAboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+
+    val currentVersion = remember {
+        try {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            "v${packageInfo.versionName}"
+        } catch (e: Exception) {
+            "v1.0.0"
+        }
+    }
+
     val gameTitle = remember {
         listOf(
             R.drawable.letter_r, R.drawable.letter_e, R.drawable.letter_k,
@@ -348,18 +590,12 @@ fun InteractiveAboutDialog(onDismiss: () -> Unit) {
     var showNamePopup by remember { mutableStateOf(false) }
     var showPhotoPopup by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .zIndex(2000f)
-            .background(Color(0xEE111111), RoundedCornerShape(24.dp))
-            .border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp))
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    // UPDATED: Now uses FullscreenDialogContainer for consistent transparency
+    FullscreenDialogContainer {
         if (!showNamePopup && !showPhotoPopup) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text("Nikakudori Mahjong", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                Text(currentVersion, color = Color.Gray, fontSize = 14.sp, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Box(modifier = Modifier.weight(0.5f)) {
@@ -386,7 +622,7 @@ fun InteractiveAboutDialog(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(text = "View project on GitHub", color = Color(0xFF00BFFF), fontSize = 14.sp, textDecoration = TextDecoration.Underline, modifier = Modifier.clickable { uriHandler.openUri("https://github.com/rekluz/Nikakudori-Mahjong") })
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back to Game", color = Color.White) }
+                Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back", color = Color.White) }
             }
         }
 
@@ -428,7 +664,7 @@ fun InteractiveAboutDialog(onDismiss: () -> Unit) {
                     Text("Rico Luzi", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     Text("Lead Developer", color = Color.LightGray)
                     Spacer(modifier = Modifier.height(20.dp))
-                    Button(onClick = { showPhotoPopup = false; clickedIndices.clear(); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back to Menu") }
+                    Button(onClick = { showPhotoPopup = false; clickedIndices.clear(); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text("Back") }
                 }
             }
         }
@@ -448,13 +684,14 @@ fun ScoreDialog(game: GameModel) {
     val topScores = game.getTopScores(selectedSize.first, selectedSize.second, "standard")
     val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"))
 
-    OverlayContainer {
+    // UPDATED: Now uses FullscreenDialogContainer for consistent transparency and height
+    FullscreenDialogContainer {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("HALL OF FAME", color = Color.Yellow, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 sizes.forEach { (r, c, mode) ->
                     val isSelected = selectedSize.first == r && selectedSize.second == c
-                    Text(text = game.getDifficultyLabel(r, c, mode), color = if (isSelected) Color.Yellow else Color.Gray, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.clickable { selectedSize = Triple(r, c, mode) }.padding(4.dp))
+                    Text(text = game.getDifficultyLabel(r, c, mode), color = if (isSelected) Color.Yellow else Color.Gray, fontSize = 11.sp, modifier = Modifier.clickable { selectedSize = Triple(r, c, mode) }.padding(4.dp))
                 }
             }
             Row(modifier = Modifier.fillMaxWidth().background(Color(0x33FFFFFF)).padding(4.dp)) {
@@ -485,7 +722,8 @@ fun ScoreDialog(game: GameModel) {
 @Composable
 fun WinDialog(game: GameModel) {
     var name by remember { mutableStateOf("") }
-    OverlayContainer {
+    // UPDATED: Now uses FullscreenDialogContainer
+    FullscreenDialogContainer {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("YOU WON!", color = Color.Yellow, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Text("Time: ${game.formatTime()}", color = Color.White, fontSize = 18.sp)
@@ -506,7 +744,8 @@ fun WinDialog(game: GameModel) {
 
 @Composable
 fun NoMovesDialog(onShuffle: () -> Unit, onNewGame: () -> Unit) {
-    OverlayContainer {
+    // UPDATED: Now uses FullscreenDialogContainer
+    FullscreenDialogContainer {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("NO MORE MOVES!", color = Color.Red, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
@@ -538,191 +777,25 @@ fun MenuPillButton(label: String, enabled: Boolean = true, bgColor: Color = Colo
 }
 
 @Composable
-fun PauseDialog(onResume: () -> Unit, onRetry: () -> Unit, onNewGame: () -> Unit, onExit: () -> Unit) {
-    OverlayContainer {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Menu", color = Color.White, fontSize = 24.sp, modifier = Modifier.padding(bottom = 16.dp))
-            DialogButton("New Game", onNewGame)
-            DialogButton("Retry Game", onRetry)
-            DialogButton("Resume", onResume)
-            DialogButton("Exit", onExit)
-        }
-    }
-}
-
-@Composable
-fun OptionsDialog(game: GameModel, onDone: () -> Unit) {
-    OverlayContainer {
-        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
-            Text("Options", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Sound Effects", color = Color.White, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Switch(
-                        checked = game.isSoundEnabled,
-                        onCheckedChange = { game.toggleSound(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF00BFFF),
-                            uncheckedThumbColor = Color.Gray,
-                            uncheckedTrackColor = Color(0xFF333333)
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Background Theme", color = Color.White, fontSize = 14.sp)
-                    Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ColorOptionCircle(Color(0xFF002147), game)
-                        ColorOptionCircle(Color(0xFF004D00), game)
-                        ColorOptionCircle(Color(0xFF4D0000), game)
-                    }
-                }
-                BoardGridSelector(game)
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                DialogButton("High Scores", { game.gameState = GameState.SCORE }, modifier = Modifier.weight(1f))
-                DialogButton("Done", onDone, modifier = Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-fun ColorOptionCircle(color: Color, game: GameModel) {
-    val isSelected = game.bgThemeColor == color
-    Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) Color(0xFF00BFFF) else Color.White.copy(alpha = 0.5f),
-                shape = CircleShape
-            )
-            .clickable { game.bgThemeColor = color }
-    )
-}
-
-@Composable
-fun BoardGridSelector(game: GameModel) {
-    val sizes = listOf(
-        Triple(5, 14, "standard"),
-        Triple(7, 16, "standard"),
-        Triple(8, 17, "standard"),
-        Triple(8, 21, "standard")
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(200.dp)) {
-        Text("Board Type", color = Color.White, fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.height(140.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(sizes) { (rows, cols, mode) ->
-                val isSelected = game.rows == rows && game.cols == cols
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Color(0xFF00BFFF) else Color(0x33FFFFFF))
-                        .border(1.dp, if (isSelected) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
-                        .clickable { game.updateGridSize(rows, cols, mode) }
-                        .padding(6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = game.getDifficultyLabel(rows, cols, mode),
-                            color = if (isSelected) Color.White else Color.LightGray,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${cols}x${rows}",
-                            color = if (isSelected) Color.White.copy(alpha = 0.8f) else Color.Gray,
-                            fontSize = 9.sp
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun DialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(onClick = onClick, modifier = modifier.fillMaxWidth(0.8f).padding(vertical = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BFFF))) { Text(text, color = Color.White) }
-}
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(targetValue = if (isPressed) 0.96f else 1f, label = "btnScale")
 
-@Composable
-fun OverlayContainer(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.size(width = 450.dp, height = 320.dp).background(Color(0xEE111111), RoundedCornerShape(24.dp)).border(2.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp)).padding(24.dp), contentAlignment = Alignment.Center) { content() }
-}
-
-private fun getTileDrawableId(imageName: String): Int {
-    return when (imageName) {
-        "tile_dot_1" -> R.drawable.tile_dot_1
-        "tile_dot_2" -> R.drawable.tile_dot_2
-        "tile_dot_3" -> R.drawable.tile_dot_3
-        "tile_dot_4" -> R.drawable.tile_dot_4
-        "tile_dot_5" -> R.drawable.tile_dot_5
-        "tile_dot_6" -> R.drawable.tile_dot_6
-        "tile_dot_7" -> R.drawable.tile_dot_7
-        "tile_dot_8" -> R.drawable.tile_dot_8
-        "tile_dot_9" -> R.drawable.tile_dot_9
-        "tile_bamboo_1" -> R.drawable.tile_bamboo_1
-        "tile_bamboo_2" -> R.drawable.tile_bamboo_2
-        "tile_bamboo_3" -> R.drawable.tile_bamboo_3
-        "tile_bamboo_4" -> R.drawable.tile_bamboo_4
-        "tile_bamboo_5" -> R.drawable.tile_bamboo_5
-        "tile_bamboo_6" -> R.drawable.tile_bamboo_6
-        "tile_bamboo_7" -> R.drawable.tile_bamboo_7
-        "tile_bamboo_8" -> R.drawable.tile_bamboo_8
-        "tile_bamboo_9" -> R.drawable.tile_bamboo_9
-        "tile_char_1" -> R.drawable.tile_char_1
-        "tile_char_2" -> R.drawable.tile_char_2
-        "tile_char_3" -> R.drawable.tile_char_3
-        "tile_char_4" -> R.drawable.tile_char_4
-        "tile_char_5" -> R.drawable.tile_char_5
-        "tile_char_6" -> R.drawable.tile_char_6
-        "tile_char_7" -> R.drawable.tile_char_7
-        "tile_char_8" -> R.drawable.tile_char_8
-        "tile_char_9" -> R.drawable.tile_char_9
-        "tile_wind_e" -> R.drawable.tile_wind_e
-        "tile_wind_s" -> R.drawable.tile_wind_s
-        "tile_wind_w" -> R.drawable.tile_wind_w
-        "tile_wind_n" -> R.drawable.tile_wind_n
-        "tile_drag_r" -> R.drawable.tile_drag_r
-        "tile_drag_g" -> R.drawable.tile_drag_g
-        "tile_drag_b" -> R.drawable.tile_drag_b
-        else -> 0
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .scale(scale)
+            .clip(CircleShape)
+            .background(if (isPressed) Color(0xFF0099CC) else Color(0xFF00BFFF))
+            .border(1.dp, Color(0x66FFFFFF), CircleShape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
-class Firework(var x: Float, var y: Float, val color: Color) {
-    private val particles = List(30) { Particle(x, y, color) }
-    var isDone = false
-    fun update() {
-        var allDone = true
-        particles.forEach { it.update(); if (!it.isDone) allDone = false }
-        isDone = allDone
-    }
-    fun draw(scope: DrawScope) { particles.forEach { it.draw(scope) } }
-}
+// REMOVED: OverlayContainer is no longer needed as we use FullscreenDialogContainer
 
-class Particle(var x: Float, var y: Float, val color: Color) {
-    private var vx = (Random.nextFloat() - 0.5f) * 15f
-    private var vy = (Random.nextFloat() - 0.5f) * 15f
-    private var alpha = 1f
-    var isDone = false
-    fun update() {
-        x += vx; y += vy; vy += 0.2f; alpha -= 0.015f
-        if (alpha <= 0) isDone = true
-    }
-    fun draw(scope: DrawScope) { if (!isDone) scope.drawCircle(color = color, radius = 4f, center = Offset(x, y), alpha = alpha) }
-}
+private fun borderStroke(width: androidx.compose.ui.unit.Dp, color: Color) = androidx.compose.foundation.BorderStroke(width, color)
