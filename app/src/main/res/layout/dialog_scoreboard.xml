@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="#054205"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/win_message"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/current_score_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/current_score_label"
+        android:textColor="#FFD700"
+        android:textSize="18sp"
+        android:layout_marginTop="10dp" />
+
+    <TextView
+        android:id="@+id/high_scores_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/placeholder_rankings"
+        android:textColor="#FFFFFF"
+        android:layout_marginTop="15dp" />
+
+    <Button
+        android:id="@+id/btn_ok"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_play_again"
+        android:layout_marginTop="20dp" />
+
+</LinearLayout>
