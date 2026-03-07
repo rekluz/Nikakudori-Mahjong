@@ -24,7 +24,8 @@
 * **Smooth Animations:** Staggered "pop-in" tile spawning and particle effects.
 * **Hall of Fame:** Local high-score tracking across all difficulty levels.
 * **Quality of Life:** Infinite Undo, smart Hint system, and automated Shuffling.
-
+* **Setttings:** Choose from 5 background themes and customize your board size
+* 
 ### 🛠 Tech Stack
 
 * **Language:** [Kotlin](https://kotlinlang.org/)
