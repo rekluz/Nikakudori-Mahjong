@@ -34,7 +34,9 @@
 ---
 
 ### 🚀 About the Project
-This game was developed as a personal journey into Android development. Built with **Kotlin** and **Jetpack Compose**, it brings a classic puzzle favorite to life with modern animations and solid logic.
+This game was developed as a personal journey into Android development. I have loved playing tile matching games on android devices for as long as I have owned them going back to the HTC G1. Not finding a good free version in the play store that has all the features and the look that I wanted I decided to create my own and this is the result. 
+
+ Built with **Kotlin** and **Jetpack Compose**, it brings a classic puzzle favorite to life with modern animations and solid logic.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/rekluz/Nikakudori-Mahjong/main/graphics/screenshot.png" width="600" alt="Nikakudori Mahjong Gameplay" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
