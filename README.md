@@ -34,7 +34,7 @@
 ---
 
 ### 🚀 About the Project
-This game was developed as a personal journey into Android development. I have loved playing tile matching games on android devices for as long as I have owned them going back to the HTC G1. Not finding a good free version in the play store that has all the features and the look that I wanted I decided to create my own and this is the result. 
+This game was developed as a personal journey into Android development. I have loved playing tile matching games on android devices for as long as I have owned them going back to the HTC G1. Not finding a good free version in the play store that had all the features and the look that I wanted I decided to create my own and this is the result. More features will definitely be coming in future updates but the main core of the game is exactly how I envisioned it to be.
 
  Built with **Kotlin** and **Jetpack Compose**, it brings a classic puzzle favorite to life with modern animations and solid logic.
 
