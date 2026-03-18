@@ -51,5 +51,4 @@ This project and its associated assets (source code, graphics, and design) are t
 * **Prohibited Use:** No part of this project may be redistributed, modified for public use, or used in commercial products without express written permission.
 * **No Warranty:** This software is provided "as-is," without warranty of any kind.
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rekluz/Nikakudori-Mahjong/main/graphics/rekluzgamesbanner.png" width="800" alt="Developed by Rekluz Games">
-</p>
+
