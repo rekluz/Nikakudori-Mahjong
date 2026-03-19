@@ -3,37 +3,29 @@
 </p>
 
 <h1 align="center">Nikakudori Mahjong</h1>
+⚠️ Project Archived
 
-<p align="center">
-  <strong>A modern, fast-paced implementation of the classic Japanese Shisen-Sho puzzle.</strong><br>
-  Built with Kotlin and Jetpack Compose for a responsive, and fun gameplay experience.
-</p>
+This repository has been archived and is no longer actively maintained.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" alt="Platform">
-  <img src="https://img.shields.io/badge/Language-Kotlin-orange.svg" alt="Language">
-  <img src="https://img.shields.io/badge/UI-Jetpack_Compose-blue.svg" alt="UI Framework">
-</p>
+A newer and improved version of this project is now available:
 
----
+👉 https://github.com/rekluz/Nikakudori-Mahjong-Redux
 
-### 📱 App Features
+What this means
 
-* **Multiple Board Sizes:** Choose your challenge, from **5x14 (Relaxed)** to **8x21 (Expert)**.
-* **Game Modes:** Supports standard layouts and unique custom **"Hollow"** board shapes.
-* **Smooth Animations:** Staggered "pop-in" tile spawning and particle effects.
-* **Hall of Fame:** Local high-score tracking across all difficulty levels.
-* **Quality of Life:** Infinite Undo, smart Hint system, and automated Shuffling.
+This codebase is preserved for reference and historical purposes
 
-### 🛠 Tech Stack
+No further updates, bug fixes, or features will be added
 
-* **Language:** [Kotlin](https://kotlinlang.org/)
-* **Toolkit:** [Jetpack Compose](https://developer.android.com/pack/compose)
-* **Architecture:** State-driven game logic using `MutableState` and Coroutines.
+Issues and pull requests are no longer monitored
 
----
+Looking for the latest version?
 
-### 🚀 About the Project
+Please visit the new repository here:
+👉 https://github.com/rekluz/Nikakudori-Mahjong-Redux
+
+Thank you for your interest and support!
+###  About the Project
 This game was developed as a personal journey into Android development. I have loved playing tile matching games on android devices for as long as I have owned them going back to the HTC G1. Not finding a good free version in the play store that had all the features and the look that I wanted I decided to create my own and this is the result. More features will definitely be coming in future updates but the main core of the game is exactly how I envisioned it to be.
 
  Built with **Kotlin** and **Jetpack Compose**, it brings a classic puzzle favorite to life with modern animations and solid logic.
